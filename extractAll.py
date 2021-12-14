@@ -93,7 +93,7 @@ def getEventsLinQuad (ntuple, variables, nominal_wgt, rwgt):
         sum_rwgt_qu += w_qu
         if w_qu == 0 : quad_null = 1 + quad_null
         if w_qu < 0:
-            w_qu = 0
+            #w_qu = 0
             quad_neg = 1 + quad_neg
 
         for (key, val) in sorted(leaves.items(), key=lambda x: x[1]):
@@ -186,6 +186,7 @@ if __name__ == '__main__':
     parser.add_argument('--root', dest='root', help='root file ntuple_$proc_SM_LI_QU_IN.root', required=True)
     parser.add_argument('--rwgt', dest='rwgtcard', help='Reweight card that contains the mapping of weights to operator couplings, used to create the gridpack', required=True)
     parser.add_argument('--wInt', dest='hasInt', help='if overall gridpack produced with more than one operator, default is false', required=False, default=False,  action='store_true')
+    parser.add_argument('--skipPresentFiles', dest='skipPresentFiles', help='skip file creation if already present in the output folder', required=False, default=False,  action='store_true')
     parser.add_argument('--ops', dest='ops', help='comma separated list of operstors to be extracted', required=False, default="*")
     parser.add_argument('--out', dest='out', help='outfolder path to save ntuples, default is current dir', required=False, default="")
     args = parser.parse_args()
@@ -209,6 +210,8 @@ if __name__ == '__main__':
 
     op_names =  {
         '2': 'cW',
+        '4': 'cHbox',
+        '7': 'cHW',
         '9': 'cHWB',
         '5': 'cHDD',
         '30': 'cll1',
@@ -216,6 +219,11 @@ if __name__ == '__main__':
         '22': 'cHl3',
         '24': 'cHq1',
         '25': 'cHq3',
+        '29': 'cll',
+        '31': 'cqq1',
+        '32': 'cqq11',
+        '33': 'cqq3',
+        '34': 'cqq31',
         #to be continued 
     }
 
@@ -241,6 +249,14 @@ if __name__ == '__main__':
     t = ROOT.gDirectory.Get (tntuple_name)
     h = ROOT.gDirectory.Get (th_name)
     overallXS = h.GetBinContent(1)
+
+    leaves = t.GetListOfLeaves()
+    vars_wrwgt = [leaves.At(i).GetName() for i in range(0, leaves.GetEntries())]
+    # variables for final ntuple
+    vars = [v for v in vars_wrwgt if "rwgt" not in v]
+    vars.sort()
+
+
     print ('[INFO] overall XS: ' + str(overallXS))
 
     print("""
@@ -248,152 +264,22 @@ if __name__ == '__main__':
     #-----------     BEGIN    ------------#
     #-------------------------------------#
     """)
-        
-    leaves = t.GetListOfLeaves()
-    vars_wrwgt = [leaves.At(i).GetName() for i in range(0, leaves.GetEntries())]
-    # variables for final ntuple
-    vars = [v for v in vars_wrwgt if "rwgt" not in v]
-    vars.sort()
-
-    events_dictionary = getEventsSM (t, vars, w, c)
-
-    eventsIN = events_dictionary['events_sm']
-    SumWgtOld = events_dictionary['sum_nominal_weight']
-    SumWgtIN = events_dictionary['sum_rwgt_sm']
-
-    f_in.Close()
-        
-    XS = overallXS * SumWgtIN / SumWgtOld
 
     ntupleFileOut = args.out + "ntuple_" + process + '_SM.root'
     ntupleNameOut = process + '_SM'
     histoNameOut = ntupleNameOut + "_nums"
 
-    print ('\n\tNtuple file-out  =  ' + ntupleFileOut)
-    print ('\tTNtuple name-out =  ' + ntupleNameOut)
-    print ('\tTH1F name-out    =  ' + histoNameOut + '\n')
+    if not (args.skipPresentFiles and os.path.isfile(ntupleFileOut)):
 
-    t = getNtuple (ntupleNameOut, ntupleNameOut, vars, eventsIN)
-    h = getHisto (histoNameOut, "global numbers", XS, SumWgtIN, SumWgtIN)
+        events_dictionary = getEventsSM (t, vars, w, c)
 
-    f_out = ROOT.TFile (ntupleFileOut, 'RECREATE')
-
-    print ('[INFO] writing ROOT file')
-    t.Write()
-    h.Write()
-        
-    f_out.Close()
-    count_filled += 1
-
-    print ('\n[INFO] end SM process')
-    print("")
-    print("# -----------  {}/{}   ----------- # ".format(count_filled, tot_number_of_files))
-    print("")
-
-    #then extract linear and quadratic
-    for op in ops:
-
-        f_in = ROOT.TFile (file_path, 'READ')
-        t = ROOT.gDirectory.Get (tntuple_name)
-        h = ROOT.gDirectory.Get (th_name)
-        overallXS = h.GetBinContent(1)
-
-        #searching weights name from the dict
-        rwgt_dict = {}
-        rwgt_dict["1"] = c[op + "_1p0"]
-        rwgt_dict["0"] = c["SM"]
-        rwgt_dict["-1"] = c[op + "_m1p0"]
-
-        events_dictionary = getEventsLinQuad (t, vars, w, rwgt_dict)
-
-        eventsLI = events_dictionary['events_li']
-        eventsQU = events_dictionary['events_qu']
+        eventsIN = events_dictionary['events_sm']
         SumWgtOld = events_dictionary['sum_nominal_weight']
-        SumWgtLI = events_dictionary['sum_rwgt_li']
-        SumWgtQU = events_dictionary['sum_rwgt_qu']
-        q_null = events_dictionary['quad_null']
-        q_neg = events_dictionary['quad_neg']
-
-        f_in.Close()
-
-        if q_null > 0:
-            print ('[WARNING] {0}: {1} events give Quad nominal weight = 0'.format(op, q_null))
-        if q_neg > 0:
-            print ('[WARNING] {0}: {1} events give Quad nominal weight < 0. Setting them to 0'.format(op, q_neg))
-
-        for component in ['LI', 'QU']:
-
-            if component == 'LI':
-                eventsExtr = eventsLI
-                SumWgtExtr = SumWgtLI
-            elif component == 'QU':
-                eventsExtr = eventsQU
-                SumWgtExtr = SumWgtQU
-            
-            XS = overallXS * SumWgtExtr / SumWgtOld
-
-            ntupleFileOut = args.out + "ntuple_" + process + '_{}_{}.root'.format(op, component)
-            ntupleNameOut = process + '_{}_{}'.format(op, component)
-            histoNameOut = ntupleNameOut + "_nums"
-
-            print ('\n\tNtuple file-out  =  ' + ntupleFileOut)
-            print ('\tTNtuple name-out =  ' + ntupleNameOut)
-            print ('\tTH1F name-out    =  ' + histoNameOut + '\n')
-            
-            t = getNtuple (ntupleNameOut, ntupleNameOut, vars, eventsExtr)
-            h = getHisto (histoNameOut, "global numbers", XS, SumWgtExtr, SumWgtExtr)
-            f_out = ROOT.TFile (ntupleFileOut, 'RECREATE')
-
-            print ('[INFO] writing {} {} ROOT file'.format(op, component))
-            t.Write()
-            h.Write()
-            
-            f_out.Close()
-            
-            count_filled += 1
-            print("")
-            print("# -----------  {}/{}   ----------- # ".format(count_filled, tot_number_of_files))
-            print("")
-
-
-    #then extract imxed interferences
-    for op_pair in op_comb:
-
-        f_in = ROOT.TFile (file_path, 'READ')
-        t = ROOT.gDirectory.Get (tntuple_name)
-        h = ROOT.gDirectory.Get (th_name)
-        overallXS = h.GetBinContent(1)
-
-        #searching weights name from the dict
-        rwgt_dict = {}
-        #00
-        rwgt_dict["00"] = c["SM"]
-
-        #11
-        if op_pair[0] + "_1p0_" + op_pair[1] + "_1p0" in c.keys():
-            rwgt_dict["11"] = c[op_pair[0] + "_1p0_" + op_pair[1] + "_1p0"]
-        elif op_pair[1] + "_1p0_" + op_pair[0] + "_1p0" in c.keys():
-            rwgt_dict["11"] = c[op_pair[1] + "_1p0_" + op_pair[0] + "_1p0"]
-        else: sys.error("c directory does not have {} component".format(op_pair[0] + "_1p0_" + op_pair[1] + "_1p0"))
-
-        #10
-        rwgt_dict["10"] = c[op_pair[0] + "_1p0"]
-        #01
-        rwgt_dict["01"] = c[op_pair[1] + "_1p0"]
-
-        events_dictionary = getEventsIn (t, vars, w, rwgt_dict)
-
-        eventsIN = events_dictionary['events_in']
-        SumWgtOld = events_dictionary['sum_nominal_weight']
-        SumWgtIN = events_dictionary['sum_rwgt_in']
+        SumWgtIN = events_dictionary['sum_rwgt_sm']
 
         f_in.Close()
             
         XS = overallXS * SumWgtIN / SumWgtOld
-
-        ntupleFileOut = args.out + "ntuple_" + process + '_{}_{}_IN.root'.format(op_pair[0], op_pair[1])
-        ntupleNameOut = process + '_{}_{}_IN'.format(op_pair[0], op_pair[1])
-        histoNameOut = ntupleNameOut + "_nums"
 
         print ('\n\tNtuple file-out  =  ' + ntupleFileOut)
         print ('\tTNtuple name-out =  ' + ntupleNameOut)
@@ -404,13 +290,149 @@ if __name__ == '__main__':
 
         f_out = ROOT.TFile (ntupleFileOut, 'RECREATE')
 
-        print ('[INFO] writing {} IN ROOT file'.format(op_pair))
+        print ('[INFO] writing ROOT file')
         t.Write()
         h.Write()
             
         f_out.Close()
-
         count_filled += 1
+
+        print ('\n[INFO] end SM process')
         print("")
         print("# -----------  {}/{}   ----------- # ".format(count_filled, tot_number_of_files))
         print("")
+    
+    else: print("[INFO] Skipping SM")
+
+    #then extract linear and quadratic
+    for op in ops:
+        
+        if not (args.skipPresentFiles and os.path.isfile( args.out + "ntuple_" + process + '_{}_LI.root'.format(op)) and os.path.isfile( args.out + "ntuple_" + process + '_{}_QU.root'.format(op)) ):
+
+            f_in = ROOT.TFile (file_path, 'READ')
+            t = ROOT.gDirectory.Get (tntuple_name)
+            h = ROOT.gDirectory.Get (th_name)
+            overallXS = h.GetBinContent(1)
+
+            #searching weights name from the dict
+            rwgt_dict = {}
+            rwgt_dict["1"] = c[op + "_1p0"]
+            rwgt_dict["0"] = c["SM"]
+            rwgt_dict["-1"] = c[op + "_m1p0"]
+
+            events_dictionary = getEventsLinQuad (t, vars, w, rwgt_dict)
+
+            eventsLI = events_dictionary['events_li']
+            eventsQU = events_dictionary['events_qu']
+            SumWgtOld = events_dictionary['sum_nominal_weight']
+            SumWgtLI = events_dictionary['sum_rwgt_li']
+            SumWgtQU = events_dictionary['sum_rwgt_qu']
+            q_null = events_dictionary['quad_null']
+            q_neg = events_dictionary['quad_neg']
+
+            f_in.Close()
+
+            if q_null > 0:
+                print ('[WARNING] {0}: {1} events give Quad nominal weight = 0'.format(op, q_null))
+            if q_neg > 0:
+                print ('[WARNING] {0}: {1} events give Quad nominal weight < 0. Setting them to 0'.format(op, q_neg))
+
+            for component in ['LI', 'QU']:
+
+                if component == 'LI':
+                    eventsExtr = eventsLI
+                    SumWgtExtr = SumWgtLI
+                elif component == 'QU':
+                    eventsExtr = eventsQU
+                    SumWgtExtr = SumWgtQU
+                
+                XS = overallXS * SumWgtExtr / SumWgtOld
+
+                ntupleFileOut = args.out + "ntuple_" + process + '_{}_{}.root'.format(op, component)
+                ntupleNameOut = process + '_{}_{}'.format(op, component)
+                histoNameOut = ntupleNameOut + "_nums"
+
+                print ('\n\tNtuple file-out  =  ' + ntupleFileOut)
+                print ('\tTNtuple name-out =  ' + ntupleNameOut)
+                print ('\tTH1F name-out    =  ' + histoNameOut + '\n')
+                
+                t = getNtuple (ntupleNameOut, ntupleNameOut, vars, eventsExtr)
+                h = getHisto (histoNameOut, "global numbers", XS, SumWgtExtr, SumWgtExtr)
+                f_out = ROOT.TFile (ntupleFileOut, 'RECREATE')
+
+                print ('[INFO] writing {} {} ROOT file'.format(op, component))
+                t.Write()
+                h.Write()
+                
+                f_out.Close()
+                
+                count_filled += 1
+                print("")
+                print("# -----------  {}/{}   ----------- # ".format(count_filled, tot_number_of_files))
+                print("")
+
+        else: print("[INFO] Skipping {}".format(op))
+
+
+    #then extract imxed interferences
+    for op_pair in op_comb:
+
+        ntupleFileOut = args.out + "ntuple_" + process + '_{}_{}_IN.root'.format(op_pair[0], op_pair[1])
+        ntupleNameOut = process + '_{}_{}_IN'.format(op_pair[0], op_pair[1])
+        histoNameOut = ntupleNameOut + "_nums"
+
+        if not (args.skipPresentFiles and os.path.isfile(ntupleFileOut)):
+
+            f_in = ROOT.TFile (file_path, 'READ')
+            t = ROOT.gDirectory.Get (tntuple_name)
+            h = ROOT.gDirectory.Get (th_name)
+            overallXS = h.GetBinContent(1)
+
+            #searching weights name from the dict
+            rwgt_dict = {}
+            #00
+            rwgt_dict["00"] = c["SM"]
+
+            #11
+            if op_pair[0] + "_1p0_" + op_pair[1] + "_1p0" in c.keys():
+                rwgt_dict["11"] = c[op_pair[0] + "_1p0_" + op_pair[1] + "_1p0"]
+            elif op_pair[1] + "_1p0_" + op_pair[0] + "_1p0" in c.keys():
+                rwgt_dict["11"] = c[op_pair[1] + "_1p0_" + op_pair[0] + "_1p0"]
+            else: sys.error("c directory does not have {} component".format(op_pair[0] + "_1p0_" + op_pair[1] + "_1p0"))
+
+            #10
+            rwgt_dict["10"] = c[op_pair[0] + "_1p0"]
+            #01
+            rwgt_dict["01"] = c[op_pair[1] + "_1p0"]
+
+            events_dictionary = getEventsIn (t, vars, w, rwgt_dict)
+
+            eventsIN = events_dictionary['events_in']
+            SumWgtOld = events_dictionary['sum_nominal_weight']
+            SumWgtIN = events_dictionary['sum_rwgt_in']
+
+            f_in.Close()
+                
+            XS = overallXS * SumWgtIN / SumWgtOld
+
+            print ('\n\tNtuple file-out  =  ' + ntupleFileOut)
+            print ('\tTNtuple name-out =  ' + ntupleNameOut)
+            print ('\tTH1F name-out    =  ' + histoNameOut + '\n')
+
+            t = getNtuple (ntupleNameOut, ntupleNameOut, vars, eventsIN)
+            h = getHisto (histoNameOut, "global numbers", XS, SumWgtIN, SumWgtIN)
+
+            f_out = ROOT.TFile (ntupleFileOut, 'RECREATE')
+
+            print ('[INFO] writing {} IN ROOT file'.format(op_pair))
+            t.Write()
+            h.Write()
+                
+            f_out.Close()
+
+            count_filled += 1
+            print("")
+            print("# -----------  {}/{}   ----------- # ".format(count_filled, tot_number_of_files))
+            print("")
+        
+        else: print("[INFO] Skipping {} IN".format(op_pair))
