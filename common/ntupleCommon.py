@@ -24,7 +24,7 @@ def getNtuple (name, title, variables, events):
 
 def getHisto (name, title, XS, sum_wgt_overall, sum_wgt_passed):
 
-    histo = ROOT.TH1F (name, title, 3, 0, 3)
+    histo = ROOT.TH1D (name, title, 3, 0, 3)
     histo.SetBinContent(1, XS)
     histo.SetBinContent(2, sum_wgt_overall)
     histo.SetBinContent(3, sum_wgt_passed)
