@@ -26,7 +26,6 @@ def getEventsSM (ntuple, variables, nominal_wgt, rwgt):
         if i % 1000 == 0: print("{}/{} {}%".format(i, ntuple.GetEntries(), 100*float(i)/ntuple.GetEntries()))
 
         values_sm = []
-
         ntuple.GetEntry(i)
 
         sum_nominal_weight += w.GetValue ()
@@ -34,13 +33,13 @@ def getEventsSM (ntuple, variables, nominal_wgt, rwgt):
 
         sum_rwgt_sm += w_sm
 
-        for (key, val) in sorted(leaves.items(), key=lambda x: x[1]):
+        for key in variables:
             if key == nominal_wgt:
                 values_sm.append(w_sm)
             else:
-                values_sm.append(float(val.GetValue ()))
+                values_sm.append(float(leaves[key].GetValue ()))
         outevents_sm.append (array('f', values_sm))
-
+    
     print ('[INFO] sum of nominal weights: ' + str(sum_nominal_weight))
     print ('[INFO] sum of new SM nominal weights: ' + str(sum_rwgt_sm))
 
@@ -97,13 +96,13 @@ def getEventsLinQuad (ntuple, variables, nominal_wgt, rwgt):
             #w_qu = 0
             quad_neg = 1 + quad_neg
 
-        for (key, val) in sorted(leaves.items(), key=lambda x: x[1]):
+        for key in variables:
             if key == nominal_wgt:
                 values_li.append(w_li)
                 values_qu.append(w_qu)
             else:
-                values_li.append(float(val.GetValue ()))
-                values_qu.append(float(val.GetValue ()))
+                values_li.append(float(leaves[key].GetValue ()))
+                values_qu.append(float(leaves[key].GetValue ()))
         outevents_li.append (array('f', values_li))
         outevents_qu.append (array('f', values_qu))
 
@@ -157,11 +156,11 @@ def getEventsIn (ntuple, variables, nominal_wgt, rwgt):
 
         sum_rwgt_in += w_in
 
-        for (key, val) in sorted(leaves.items(), key=lambda x: x[1]):
+        for key in variables:
             if key == nominal_wgt:
                 values_in.append(w_in)
             else:
-                values_in.append(float(val.GetValue ()))
+                values_in.append(float(leaves[key].GetValue ()))
         outevents_in.append (array('f', values_in))
 
     print ('[INFO] sum of SM + LI + QU + IN nominal weights: ' + str(sum_nominal_weight))
